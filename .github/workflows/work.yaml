@@ -36,7 +36,10 @@ jobs:
               
             - name: Run Script
               run: node jd_sign.js
-                
+            
+            - name: Run DianDian
+              run: node jd_necklace.js
+
             - name: Upload result file
               uses: actions/upload-artifact@master
               if: env.UPLOAD_BESULT_DIR == 'true'
