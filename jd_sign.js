@@ -119,17 +119,14 @@ function main() {
     console.log('脚本文件下载失败，任务中断！');
     fs.writeFileSync(error_path, err, 'utf8')
   })
-  download(js_zns, './').then(res=>{
+ 
     // 2、替换cookie
     setupCookie()
     // 3、执行脚本
-    exec(`node '${js_path}' >> '${result_path}'`);
+    exec(`node 'jd_nian.js' >> '${result_path}'`);
     // 4、发送推送
     sendNotificationIfNeed() 
-  }).catch((err)=>{
-    console.log('脚本文件下载失败，任务中断！');
-    fs.writeFileSync(error_path, err, 'utf8')
-  })
+ 
 
 }
 
