@@ -123,7 +123,7 @@ function main() {
     // 2、替换cookie
     setupCookie()
     // 3、执行脚本
-    exec(`node 'jd_nian.js' >> '${result_path}'`);
+    exec(`node jd_nian.js >> '${result_path}'`);
     console.log(cookie)
     // 4、发送推送
     sendNotificationIfNeed() 
