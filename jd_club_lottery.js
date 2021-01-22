@@ -1,37 +1,35 @@
 /*
- * @Author: LXK9301 https://github.com/LXK9301
- * @Date: 2020-11-20 11:42:03 
- * @Last Modified by: LXK9301
- * @Last Modified time: 2020-12-12 12:27:14
- */
+* @Author: LXK9301
+* @Date: 2020-11-03 20:35:07
+* @Last Modified by: LXK9301
+* @Last Modified time: 2020-11-23 12:27:09
+*/
 /*
-点点券，可以兑换无门槛红包（1元，5元，10元，100元，部分红包需抢购）
-APP活动入口：“最新版本京东APP >领券中心/券后9.9>领点点券”页面
-网页入口：https://h5.m.jd.com/babelDiy/Zeus/41Lkp7DumXYCFmPYtU3LTcnTTXTX/index.html
+摇京豆(京东APP首页-领京豆-摇京豆)
+更新时间:2020-10-12
+Modified from https://github.com/Zero-S1/JD_tools/blob/master/JD_vvipclub.py
 已支持IOS双京东账号,Node.js支持N个京东账号
 脚本兼容: QuantumultX, Surge, Loon, JSBox, Node.js
-===============Quantumultx===============
+============QuantumultX==============
 [task_local]
-#点点券
-10 0,20 * * * https://raw.githubusercontent.com/LXK9301/jd_scripts/master/jd_necklace.js, tag=点点券, img-url=https://raw.githubusercontent.com/Orz-3/task/master/jd.png, enabled=true
-
-================Loon==============
+#摇京豆
+5 0 * * * https://raw.githubusercontent.com/LXK9301/jd_scripts/master/jd_club_lottery.js, tag=摇京豆, img-url=https://raw.githubusercontent.com/58xinian/icon/master/jdyjd.png, enabled=true
+=================Loon===============
 [Script]
-cron "10 0,20 * * *" script-path=https://raw.githubusercontent.com/LXK9301/jd_scripts/master/jd_necklace.js,tag=点点券
-
-===============Surge=================
-点点券 = type=cron,cronexp="10 0,20 * * *",wake-system=1,timeout=3600,script-path=https://raw.githubusercontent.com/LXK9301/jd_scripts/master/jd_necklace.js
+cron "5 0 * * *" script-path=https://raw.githubusercontent.com/LXK9301/jd_scripts/master/jd_club_lottery.js,tag=摇京豆
+=================Surge==============
+[Script]
+摇京豆 = type=cron,cronexp="5 0 * * *",wake-system=1,timeout=3600,script-path=https://raw.githubusercontent.com/LXK9301/jd_scripts/master/jd_club_lottery.js
 
 ============小火箭=========
-点点券 = type=cron,script-path=https://raw.githubusercontent.com/LXK9301/jd_scripts/master/jd_necklace.js, cronexpr="10 0,20 * * *", timeout=3600, enable=true
- */
-const $ = new Env('点点券');
+摇京豆 = type=cron,script-path=https://raw.githubusercontent.com/LXK9301/jd_scripts/master/jd_club_lottery.js, cronexpr="5 0 * * *", timeout=3600, enable=true
+*/
 
+const $ = new Env('摇京豆');
 const notify = $.isNode() ? require('./sendNotify') : '';
 //Node.js用户请在jdCookie.js处填写京东ck;
 const jdCookieNode = $.isNode() ? require('./jdCookie.js') : '';
-const openUrl = `openjd://virtual?params=%7B%20%22category%22:%20%22jump%22,%20%22des%22:%20%22m%22,%20%22url%22:%20%22https://h5.m.jd.com/babelDiy/Zeus/41Lkp7DumXYCFmPYtU3LTcnTTXTX/index.html%22%20%7D`
-let message = '';
+
 //IOS等用户直接用NobyDa的jd cookie
 let cookiesArr = [], cookie = '';
 if ($.isNode()) {
@@ -48,8 +46,7 @@ if ($.isNode()) {
   cookiesArr.reverse();
   cookiesArr = cookiesArr.filter(item => item !== "" && item !== null && item !== undefined);
 }
-
-const JD_API_HOST = 'https://api.m.jd.com/api';
+const JD_API_HOST = 'https://api.m.jd.com/client.action';
 !(async () => {
   if (!cookiesArr[0]) {
     $.msg($.name, '【提示】请先获取京东账号一cookie\n直接使用NobyDa的京东签到获取', 'https://bean.m.jd.com/bean/signIndex.action', {"open-url": "https://bean.m.jd.com/bean/signIndex.action"});
@@ -60,9 +57,11 @@ const JD_API_HOST = 'https://api.m.jd.com/api';
       cookie = cookiesArr[i];
       $.UserName = decodeURIComponent(cookie.match(/pt_pin=(.+?);/) && cookie.match(/pt_pin=(.+?);/)[1])
       $.index = i + 1;
+      $.freeTimes = 0;
+      $.prizeBeanCount = 0;
+      $.totalBeanCount = 0;
       $.isLogin = true;
       $.nickName = '';
-      message = '';
       await TotalBean();
       console.log(`\n开始【京东账号${$.index}】${$.nickName || $.UserName}\n`);
       if (!$.isLogin) {
@@ -73,7 +72,8 @@ const JD_API_HOST = 'https://api.m.jd.com/api';
         }
         continue
       }
-      await jd_necklace();
+      await clubLottery();
+      await showMsg();
     }
   }
 })()
@@ -83,221 +83,268 @@ const JD_API_HOST = 'https://api.m.jd.com/api';
     .finally(() => {
       $.done();
     })
-async function jd_necklace() {
-  await necklace_homePage();
-  await doTask();
-  await necklace_homePage();
-  await receiveBubbles();
-  await sign();
-  await necklace_homePage();
-  // await necklace_exchangeGift(10);//自动兑换多少钱的无门槛红包，1000代表1元
-  await showMsg();
+
+async function clubLottery() {
+  await doTasks();//做任务
+  await getFreeTimes();//获取摇奖次数
+  await vvipclub_receive_lottery_times();//新版：领取一次免费的机会
+  await vvipclub_shaking_info();//新版：查询多少次摇奖次数
+  await shaking();//开始摇奖
+}
+async function doTasks() {
+  const browseTaskRes = await getTask('browseTask');
+  if (browseTaskRes.success) {
+    const { totalPrizeTimes, currentFinishTimes, taskItems } = browseTaskRes.data[0];
+    const taskTime = totalPrizeTimes - currentFinishTimes;
+    if (taskTime > 0) {
+      let taskID = [];
+      taskItems.map(item => {
+        if (!item.finish) {
+          taskID.push(item.id);
+        }
+      });
+      console.log(`开始做浏览页面任务`)
+      for (let i = 0; i < new Array(taskTime).fill('').length; i++) {
+        await $.wait(1000);
+        await doTask('browseTask', taskID[i]);
+      }
+    }
+  } else {
+    console.log(`${JSON.stringify(browseTaskRes)}`)
+  }
+  const attentionTaskRes = await getTask('attentionTask');
+  if (attentionTaskRes.success) {
+    const { totalPrizeTimes, currentFinishTimes, taskItems } = attentionTaskRes.data[0];
+    const taskTime = totalPrizeTimes - currentFinishTimes;
+    if (taskTime > 0) {
+      let taskID = [];
+      taskItems.map(item => {
+        if (!item.finish) {
+          taskID.push(item.id);
+        }
+      });
+      console.log(`开始做关注店铺任务`)
+      for (let i = 0; i < new Array(taskTime).fill('').length; i++) {
+        await $.wait(1000);
+        await doTask('attentionTask', taskID[i].toString());
+      }
+    }
+  }
+}
+async function shaking() {
+  for (let i = 0; i < new Array($.leftShakingTimes).fill('').length; i++) {
+    console.log(`开始新版-摇奖`)
+    // await $.wait(500);
+    const newShakeBeanRes = await vvipclub_shaking_lottery();
+    if (newShakeBeanRes.success) {
+      console.log(`新版-剩余摇奖次数：${newShakeBeanRes.data.remainLotteryTimes}`)
+      if (newShakeBeanRes.data && newShakeBeanRes.data.rewardBeanAmount) {
+        $.prizeBeanCount += newShakeBeanRes.data.rewardBeanAmount;
+        console.log(`恭喜你，中奖了，获得${newShakeBeanRes.data.rewardBeanAmount}京豆\n`)
+      } else {
+        console.log(`未中奖\n`)
+      }
+    }
+  }
+  for (let i = 0; i < new Array($.freeTimes).fill('').length; i++) {
+    console.log(`开始摇奖`)
+    await $.wait(1000);
+    const shakeBeanRes = await shakeBean();
+    if (shakeBeanRes.success) {
+      console.log(`剩余摇奖次数：${shakeBeanRes.data.luckyBox.freeTimes}`)
+      if (shakeBeanRes.data && shakeBeanRes.data.prizeBean) {
+        $.prizeBeanCount += shakeBeanRes.data.prizeBean.count;
+        $.totalBeanCount = shakeBeanRes.data.luckyBox.totalBeanCount;
+      }
+    }
+  }
 }
 function showMsg() {
-  return new Promise(async resolve => {
-    let nowTimes = new Date(new Date().getTime() + new Date().getTimezoneOffset()*60*1000 + 8*60*60*1000);
-    if (nowTimes.getHours() >= 20) {
-      $.msg($.name, '', `京东账号${$.index} ${$.nickName}\n当前${$.name}：${$.totalScore}个\n可兑换无门槛红包：${$.totalScore / 1000}元\n点击弹窗即可去兑换(注：此红包具有时效性)`, { 'open-url': openUrl});
-    }
-    // 云端大于10元无门槛红包时进行通知推送
-    if ($.isNode() && $.totalScore >= 10000 && nowTimes.getHours() >= 20) await notify.sendNotify(`${$.name} - 京东账号${$.index} - ${$.nickName}`, `京东账号${$.index} ${$.nickName}\n当前${$.name}：${$.totalScore}个\n可兑换无门槛红包：${$.totalScore / 1000}元\n点击链接即可去兑换(注：此红包具有时效性)\n↓↓↓ \n\n ${openUrl} \n\n ↑↑↑`, { url: openUrl })
-    resolve()
-  })
-}
-async function doTask() {
-  for (let item of $.taskConfigVos) {
-    if (item.taskStage === 0) {
-      console.log(`${item.taskName}未完成`);
-      await necklace_startTask(item.id);
-      await $.wait(2000);
-      await necklace_startTask(item.id);
-    } else if (item.taskStage === 2) {
-      console.log(`${item.taskName}任务已做完,奖励未领取`);
-    } else if (item.taskStage === 3) {
-      console.log(`${item.taskName}奖励已领取`);
-    } else if (item.taskStage === 1) {
-      console.log(`${item.taskName}任务未完成\n`);
-    }
+  if ($.prizeBeanCount) {
+    $.msg(`${$.name}`, `京东账号${$.index} ${$.nickName}`, `【获得】${$.prizeBeanCount}京豆\n【账号总计】${$.totalBeanCount}京豆`);
   }
 }
-async function receiveBubbles() {
-  for (let item of $.bubbles) {
-    console.log(`开始领取点点券\n`);
-    await necklace_chargeScores(item.id)
-  }
-}
-async function sign() {
-  if ($.signInfo.todayCurrentSceneSignStatus === 1) {
-    await necklace_sign();
-  } else {
-    console.log(`当前${new Date(new Date().getTime() + new Date().getTimezoneOffset()*60*1000 + 8*60*60*1000).toLocaleString()}已签到`)
-  }
-}
-//每日签到福利
-function necklace_sign() {
+//====================API接口=================
+//查询剩余摇奖次数API
+function vvipclub_shaking_info() {
   return new Promise(resolve => {
-    const body = {
-      currentDate: $.lastRequestTime.replace(/:/g, "%3A"),
+    const options = {
+      url: `https://api.m.jd.com/?t=${Date.now()}&appid=sharkBean&functionId=vvipclub_shaking_info`,
+      headers: {
+        "accept": "application/json",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "zh-CN,zh;q=0.9",
+        "cookie": cookie,
+        "origin": "https://skuivip.jd.com",
+        "referer": "https://skuivip.jd.com/",
+        "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.2.2;14.2;%E4%BA%AC%E4%B8%9C/9.2.2 CFNetwork/1206 Darwin/20.1.0")
+      }
     }
-    $.post(taskPostUrl("necklace_sign", body), async (err, resp, data) => {
+    $.get(options, (err, resp, data) => {
       try {
         if (err) {
-          console.log(`${JSON.stringify(err)}`)
-          console.log(`${$.name} API请求失败，请检查网路重试`)
+          console.log(`\n${$.name}: API查询请求失败 ‼️‼️`)
+          $.logErr(err);
         } else {
-          if (safeGet(data)) {
-            data = JSON.parse(data);
-            if (data.rtn_code === 0) {
-              if (data.data.biz_code === 0) {
-                console.log(`签到成功，时间：${new Date(new Date().getTime() + new Date().getTimezoneOffset()*60*1000 + 8*60*60*1000).toLocaleString()}`)
-                // $.taskConfigVos = data.data.result.taskConfigVos;
-                // $.exchangeGiftConfigs = data.data.result.exchangeGiftConfigs;
-              }
-            }
+          // console.log(data)
+          data = JSON.parse(data);
+          if (data.success) {
+            $.leftShakingTimes = data.data.leftShakingTimes;//剩余抽奖次数
+            console.log(`新版——摇奖次数${$.leftShakingTimes}`);
           }
         }
       } catch (e) {
-        $.logErr(e, resp)
+        $.logErr(e, resp);
       } finally {
         resolve(data);
       }
     })
   })
 }
-//兑换无门槛红包
-function necklace_exchangeGift(scoreNums) {
+//新版摇奖API
+function vvipclub_shaking_lottery() {
   return new Promise(resolve => {
-    const body = {
-      scoreNums,
-      "giftConfigId": 31,
-      currentDate: $.lastRequestTime.replace(/:/g, "%3A"),
+    const options = {
+      url: `https://api.m.jd.com/?t=${Date.now()}&appid=sharkBean&functionId=vvipclub_shaking_lottery&body=%7B%7D`,
+      headers: {
+        "accept": "application/json",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "zh-CN,zh;q=0.9",
+        "cookie": cookie,
+        "origin": "https://skuivip.jd.com",
+        "referer": "https://skuivip.jd.com/",
+        "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.2.2;14.2;%E4%BA%AC%E4%B8%9C/9.2.2 CFNetwork/1206 Darwin/20.1.0")
+      }
     }
-    $.post(taskPostUrl("necklace_exchangeGift", body), async (err, resp, data) => {
+    $.get(options, (err, resp, data) => {
       try {
         if (err) {
-          console.log(`${JSON.stringify(err)}`)
-          console.log(`${$.name} API请求失败，请检查网路重试`)
+          console.log(`\n${$.name}: API查询请求失败 ‼️‼️`)
+          $.logErr(err);
         } else {
-          if (safeGet(data)) {
-            data = JSON.parse(data);
-            if (data.rtn_code === 0) {
-              if (data.data.biz_code === 0) {
-                const { result } = data.data;
-                message += `${result.redpacketTitle}：${result.redpacketAmount}元兑换成功\n`;
-                message += `红包有效期：${new Date(result.endTime + new Date().getTimezoneOffset()*60*1000 + 8*60*60*1000).toLocaleString('zh', {hour12: false})}`;
-                console.log(message)
-              }
-            }
-          }
+          // console.log(data)
+          data = JSON.parse(data);
         }
       } catch (e) {
-        $.logErr(e, resp)
+        $.logErr(e, resp);
       } finally {
         resolve(data);
       }
     })
   })
 }
-//领取奖励
-function necklace_chargeScores(bubleId) {
+//领取新版本摇一摇一次免费的次数
+function vvipclub_receive_lottery_times() {
   return new Promise(resolve => {
-    const body = {
-      bubleId,
-      currentDate: $.lastRequestTime.replace(/:/g, "%3A"),
+    const options = {
+      url: `https://api.m.jd.com/?t=${Date.now()}&appid=sharkBean&functionId=vvipclub_receive_lottery_times`,
+      headers: {
+        "accept": "application/json",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "zh-CN,zh;q=0.9",
+        "cookie": cookie,
+        "origin": "https://skuivip.jd.com",
+        "referer": "https://skuivip.jd.com/",
+        "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.2.2;14.2;%E4%BA%AC%E4%B8%9C/9.2.2 CFNetwork/1206 Darwin/20.1.0")
+      }
     }
-    $.post(taskPostUrl("necklace_chargeScores", body), async (err, resp, data) => {
+    $.get(options, (err, resp, data) => {
       try {
         if (err) {
-          console.log(`${JSON.stringify(err)}`)
-          console.log(`${$.name} API请求失败，请检查网路重试`)
+          console.log(`\n${$.name}: API查询请求失败 ‼️‼️`)
+          $.logErr(err);
         } else {
-          if (safeGet(data)) {
-            data = JSON.parse(data);
-            if (data.rtn_code === 0) {
-              if (data.data.biz_code === 0) {
-                // $.taskConfigVos = data.data.result.taskConfigVos;
-                // $.exchangeGiftConfigs = data.data.result.exchangeGiftConfigs;
-              }
-            }
-          }
+          // console.log(data)
+          data = JSON.parse(data);
         }
       } catch (e) {
-        $.logErr(e, resp)
+        $.logErr(e, resp);
       } finally {
         resolve(data);
       }
     })
   })
 }
-function necklace_startTask(taskId) {
+//查询多少次机会
+function getFreeTimes() {
   return new Promise(resolve => {
-    const body = {
-      taskId,
-      currentDate: $.lastRequestTime.replace(/:/g, "%3A"),
-    }
-    $.post(taskPostUrl("necklace_startTask", body), async (err, resp, data) => {
+    $.get(taskUrl('vvipclub_luckyBox', { "info": "freeTimes" }), (err, resp, data) => {
       try {
         if (err) {
-          console.log(`${JSON.stringify(err)}`)
-          console.log(`${$.name} API请求失败，请检查网路重试`)
+          console.log(`\n${$.name}: API查询请求失败 ‼️‼️`)
+          $.logErr(err);
         } else {
-          if (safeGet(data)) {
-            data = JSON.parse(data);
-            if (data.rtn_code === 0) {
-              if (data.data.biz_code === 0) {
-                // $.taskConfigVos = data.data.result.taskConfigVos;
-                // $.exchangeGiftConfigs = data.data.result.exchangeGiftConfigs;
-              }
-            }
+          // console.log(data)
+          data = JSON.parse(data);
+          if (data.success) {
+            $.freeTimes = data.data.freeTimes;
+            console.log(`摇奖次数${$.freeTimes}`);
           }
         }
       } catch (e) {
-        $.logErr(e, resp)
+        $.logErr(e, resp);
       } finally {
         resolve();
       }
     })
   })
 }
-function necklace_homePage() {
+function getTask(info) {
   return new Promise(resolve => {
-    $.post(taskPostUrl('necklace_homePage'), async (err, resp, data) => {
+    $.get(taskUrl('vvipclub_lotteryTask', { info, "withItem": true }), (err, resp, data) => {
       try {
         if (err) {
-          console.log(`${JSON.stringify(err)}`)
-          console.log(`${$.name} API请求失败，请检查网路重试`)
+          console.log(`\n${$.name}: API查询请求失败 ‼️‼️`)
+          $.logErr(err);
         } else {
-          if (safeGet(data)) {
-            data = JSON.parse(data);
-            if (data.rtn_code === 0) {
-              if (data.data.biz_code === 0) {
-                $.taskConfigVos = data.data.result.taskConfigVos;
-                $.exchangeGiftConfigs = data.data.result.exchangeGiftConfigs;
-                $.lastRequestTime = data.data.result.lastRequestTime;
-                $.bubbles = data.data.result.bubbles;
-                $.signInfo = data.data.result.signInfo;
-                $.totalScore = data.data.result.totalScore;
-              }
-            }
-          }
+          // console.log(data)
+          data = JSON.parse(data);
         }
       } catch (e) {
-        $.logErr(e, resp)
+        $.logErr(e, resp);
       } finally {
-        resolve();
+        resolve(data);
       }
     })
   })
 }
-function taskPostUrl(function_id, body = {}) {
-  const time = new Date().getTime() + new Date().getTimezoneOffset()*60*1000 + 8*60*60*1000;
-  return {
-    url: `${JD_API_HOST}?functionId=${function_id}&appid=jd_mp_h5&loginType=2&client=jd_mp_h5&t=${time}&body=${escape(JSON.stringify(body))}`,
-    headers: {
-      "Cookie": cookie,
-      "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.2.2;14.2;%E4%BA%AC%E4%B8%9C/9.2.2 CFNetwork/1206 Darwin/20.1.0"),
-    }
-  }
+function doTask(taskName, taskItemId) {
+  return new Promise(resolve => {
+    $.get(taskUrl('vvipclub_doTask', { taskName, taskItemId }), (err, resp, data) => {
+      try {
+        if (err) {
+          console.log(`\n${$.name}: API查询请求失败 ‼️‼️`)
+          $.logErr(err);
+        } else {
+          // console.log(data)
+          data = JSON.parse(data);
+        }
+      } catch (e) {
+        $.logErr(e, resp);
+      } finally {
+        resolve(data);
+      }
+    })
+  })
+}
+function shakeBean() {
+  return new Promise(resolve => {
+    $.get(taskUrl('vvipclub_shaking', { "type": '0' }), (err, resp, data) => {
+      try {
+        if (err) {
+          console.log(`\n${$.name}: API查询请求失败 ‼️‼️`)
+          $.logErr(err);
+        } else {
+          console.log(`摇奖结果:${data}`)
+          data = JSON.parse(data);
+        }
+      } catch (e) {
+        $.logErr(e, resp);
+      } finally {
+        resolve(data);
+      }
+    })
+  })
 }
 function TotalBean() {
   return new Promise(async resolve => {
@@ -339,17 +386,6 @@ function TotalBean() {
     })
   })
 }
-function safeGet(data) {
-  try {
-    if (typeof JSON.parse(data) == "object") {
-      return true;
-    }
-  } catch (e) {
-    console.log(e);
-    console.log(`京东服务器访问数据为空，请检查自身设备网络情况`);
-    return false;
-  }
-}
 function jsonParse(str) {
   if (typeof str == "string") {
     try {
@@ -358,6 +394,17 @@ function jsonParse(str) {
       console.log(e);
       $.msg($.name, '', '请勿随意在BoxJs输入框修改内容\n建议通过脚本去获取cookie')
       return [];
+    }
+  }
+}
+function taskUrl(function_id, body = {}, appId = 'vip_h5') {
+  return {
+    url: `${JD_API_HOST}?functionId=${function_id}&appid=${appId}&body=${escape(JSON.stringify(body))}&_=${Date.now()}`,
+    headers: {
+      'Cookie': cookie,
+      'Host': 'api.m.jd.com',
+      'User-Agent': $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.2.2;14.2;%E4%BA%AC%E4%B8%9C/9.2.2 CFNetwork/1206 Darwin/20.1.0"),
+      'Referer': 'https://vip.m.jd.com/newPage/reward/123dd/slideContent?page=focus',
     }
   }
 }

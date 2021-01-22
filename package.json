@@ -17,8 +17,14 @@
   },
   "homepage": "https://github.com/ZHDeveloper/JD_Sign_Action#readme",
   "dependencies": {
+    "crypto-js": "^4.0.0",
     "download": "^8.0.0",
+    "got": "^11.8.1",
     "request": "^2.88.2",
-    "request-promise": "^4.2.6"
+    "request-promise": "^4.2.6",
+    "http-server": "^0.12.3",
+    "qrcode-terminal": "^0.12.0",
+    "tough-cookie": "^4.0.0",
+    "tunnel": "0.0.6"
   }
 }
