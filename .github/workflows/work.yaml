@@ -33,6 +33,8 @@ jobs:
                 
             - name: Run install
               run: npm install
+            - name: Get ShareCode
+              run: node jd_get_share_code.js
               
             - name: Run Script
               run: node jd_sign.js
