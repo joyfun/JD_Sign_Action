@@ -8,7 +8,7 @@ on:
   #   branches:
   #     - master
   schedule:
-    - cron: 0 1 * * *
+    - cron: 0 22 * * *
   watch:
     types: started
     
@@ -39,17 +39,6 @@ jobs:
             - name: Run Script
               run: node jd_sign.js
         
-            - name: Run Jd_NIAN
-              run: node jd_nian.js
-
-            - name: Run Jd_NIAN_AR
-              run: node jd_nian_ar.js
-            
-            - name: Run Jd_NIAN_WE
-              run: node jd_nian_wechat.js
-
-            - name: Run Jd_NIAN_SING
-              run: node jd_nian_sign.js
 
             - name: Upload result file
               uses: actions/upload-artifact@master
